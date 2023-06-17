@@ -1,0 +1,243 @@
+﻿@page "/login"
+@using BlazorServer.Pages;
+@using BlazorServer.Services;
+@using BusinessLayer;
+@using System.Security.Claims;
+
+@using ServiceLayer;
+@using Microsoft.Extensions.Logging;
+@inject IdentityManager identityManager;
+@inject ErrorModel errorModel;
+@inject ILogger<User> logger;
+@inject NavigationManager navigationManager;
+@inject CustomAuthenticationStateProvider authenticationStateProvider;
+@inject IJSRuntime JsRuntime;
+
+@using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+@using System.Security.Cryptography;
+
+<AuthorizeView Roles="Admin, User">
+    <Authorized>
+
+
+    </Authorized>
+
+    <NotAuthorized>
+        <EditForm Model="@model" class="form-box2" Context="CONTEXT" OnValidSubmit="@HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-box">
+                <div class="header-text">
+                    <h3>Вход в системата</h3>
+                </div>
+                <InputText id="name" placeholder="ЕГН" maxlength="10" class="form-control" @bind-Value="model.UserName " />
+
+
+                <InputText class="form-control" placeholder="Парола" id="password" type="password" @bind-Value="model.PasswordHash" />
+                <button type="submit" class="btn border-dark mt-2 ml-3">Вход</button>
+
+
+
+
+            </div>
+        </EditForm>
+        <h4 id="error" class="col-md-4 text-danger">@errorModel.Description</h4>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    private User model = new User();
+
+    private AuthenticationState? authenticationState;
+
+    protected override async void OnInitialized()
+    {
+          if ((await identityManager.ReadUserEGNAsync("admin")) == null)
+              {
+              await identityManager.SeedDataAsync("admin", "admin");
+
+          }
+    }
+
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            User a = await identityManager.ReadUserEGNAsync(model.UserName);
+            if (a != null)
+            {
+                if (a.Authenticated == false)
+                {
+                    navigationManager.NavigateTo($"WaitPage/{a.Id}", true);
+                }
+                else
+                {
+                    try
+                    {
+                        new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                        authenticationState = new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                        await authenticationStateProvider.NotifyAuthenticationStateChanged
+                       (Task<AuthenticationState>.FromResult(authenticationState));
+
+
+                        if (await authenticationStateProvider.GetUserIdentity(true) != null &&
+                            await authenticationStateProvider.IsAuthenticated(true))
+                        {
+
+                            logger.Log(LogLevel.Information, $"User {model.UserName} logged successfully!");
+
+                            navigationManager.NavigateTo("/", true); // Rerender the navigation menu!
+                        }
+                        else
+                        {
+                            await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");
+                            model = new User();
+                        }
+                    }
+                    catch (Exception)
+                    {
+
+                        await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");// да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+                        model = new User();
+                    }
+                }
+            }
+            else
+            {
+                await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");// да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+                model = new User();
+            }
+
+        }
+        catch (Exception ex) // Handle concrete exceptions first!
+        {
+            errorModel.Code = "DB";
+            errorModel.Description = ex.Message;
+            logger.Log(LogLevel.Error, ex.Message);
+        }
+    }
+
+   
+
+}
+
+@*
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: poppins;
+        font-size: 16px;
+        color: #fff;
+    }
+
+    .form-box {
+        background-color: rgba(0, 0, 0, 0.5);
+        margin: auto auto;
+        padding: 40px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px #000;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 40em;
+        height: 20em;
+    }
+
+        .form-box:before {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            content: "";
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            z-index: -1;
+            display: block;
+            filter: blur(2px);
+        }
+
+        .form-box .header-text {
+            font-size: 32px;
+            font-weight: 600;
+            padding-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-box input {
+            margin: 10px 0px;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 18px;
+            font-family: poppins;
+        }
+
+            .form-box input[type=checkbox] {
+                display: none;
+            }
+
+        .form-box label {
+            position: relative;
+            margin-left: 5px;
+            margin-right: 10px;
+            top: 5px;
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+            .form-box label:before {
+                content: "";
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border-radius: 5px;
+                position: absolute;
+                left: 0;
+                bottom: 1px;
+                background-color: #ddd;
+            }
+
+        .form-box input[type=checkbox]:checked + label:before {
+            content: "\2713";
+            font-size: 20px;
+            color: #000;
+            text-align: center;
+            line-height: 20px;
+        }
+
+        .form-box span {
+            font-size: 14px;
+        }
+
+        .form-box button {
+            background-color: #2828aa;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 18px;
+            padding: 10px;
+            margin: 20px 0px;
+        }
+
+    span a {
+        color: #BBB;
+    }
+
+</style>
+*@

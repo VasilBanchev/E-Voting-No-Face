@@ -1,0 +1,248 @@
+﻿@page "/Register"
+@using BusinessLayer;
+@using ServiceLayer;
+@using BlazorServer.Services;
+@using BlazorServer.Pages;
+@inject ErrorModel errorModel;
+@inject ILogger<User> logger;
+@inject IdentityManager identityManager;
+@inject NavigationManager navigationManager;
+@inject IJSRuntime JsRuntime;
+@*
+<style>
+	* {
+		box-sizing: border-box;
+	}
+
+	body {
+		font-family: poppins;
+		font-size: 16px;
+		color: #fff;
+	}
+
+	.form-box {
+		background-color: rgba(0, 0, 0, 0.55);
+		margin: auto auto;
+		padding: 10px;
+		border-radius: 5px;
+		box-shadow: 0 0 12px #000;
+		position: center;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		width: 30em;
+		height: auto;
+	}
+
+		.form-box:before {
+			width: 100%;
+			height: 100%;
+			background-size: cover;
+			content: "";
+			position: fixed;
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
+			z-index: -1;
+			display: block;
+			filter: blur(2px);
+		}
+
+		.form-box .header-text {
+			font-size: 32px;
+			font-weight: 600;
+			padding-bottom: 10px;
+			text-align: center;
+		}
+
+		.form-box input {
+			margin: 7px 0px;
+			border: none;
+			padding: 6.5px;
+			border-radius: 4px;
+			width: 100%;
+			font-size: 18px;
+			font-family: poppins;
+		}
+
+			.form-box input[type=checkbox] {
+				display: none;
+			}
+
+		.form-box input[type=checkbox]:checked + label:before {
+			content: "\2713";
+			font-size: 20px;
+			color: #000;
+			text-align: center;
+			line-height: 20px;
+		}
+
+		.form-box span {
+			font-size: 14px;
+		}
+
+		.form-box button {
+			background-color: #2828aa;
+			color: #fff;
+			border: none;
+			border-radius: 5px;
+			cursor: pointer;
+			width: 100%;
+			font-size: 18px;
+			padding: 10px;
+			margin: 10px 0px;
+		}
+
+	span a {
+		color: #BBB;
+	}
+
+</style>
+*@
+
+        
+		
+        <EditForm Model="@iDCard" class="form-box-register" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+			<div class="form-box">
+		<div class="header-text">
+			<h3>Регистриране в системата</h3>
+			</div>
+            <input type="text" placeholder="ЕГН" minlength="10" maxlength="10" @bind-value="iDCard.EGN" required />
+			<input type="password" placeholder="Парола" @bind-value="password" required />
+			<input type="text" minlength="9" placeholder="Номер на личната карта" maxlength="9" @bind-value="iDCard.IDCardNumber" required />            
+			<input type="text" placeholder="Име" @bind-value="iDCard.Name" required />
+			<input type="text" placeholder="Презиме" @bind-value="iDCard.MidName" required />
+			<input type="text" placeholder="Фамилия" @bind-value="iDCard.LastName" required /><br />
+			<label> <big>Местожителство</big></label> <select @bind="region">  @for (int i = 0; i < regions.Count; i++)
+        {
+            <option value="@i">
+                @regions[i]
+            </option>
+        }
+    </select>
+				<label><big>Дата на изтичане на личната карта: </big></label><br />
+
+            <input type="date" @bind-value="iDCard.DateOfExpiry" required />
+			<label><big>Снимка на предната част на личната карта:</big> </label><br />
+
+            <InputFile accept=".png,.jpg" OnChange="@AddFrontPhoto" required />
+			<label><big>Снимка на задната част на личната карта:</big> </label><br />
+            <InputFile accept=".png,.jpg" OnChange="@AddBackPhoto" required />
+            <button type="submit">Регистрация</button>
+	</div>
+        </EditForm>
+	
+        <h3 class="col-md-4 text-danger">@errMess</h3>
+   
+
+
+
+@code {
+	string errMess = string.Empty;
+
+	IDCard iDCard = new IDCard();
+	IDCardPhotos idPhotoes;
+	string password = string.Empty;
+	byte[] photo1;
+	byte[] photo2;
+	int region;
+
+	List<string> regions = new List<string>(){ "Благоевград", "Бургас", "Варна", "Велико Търново", "Видин", "Враца", "Габрово", "Кърджали", "Кюстендил", "Ловеч", "Монтана", "Пазарджик", "Перник", "Плевен", "Пловдив", "Разград", "Русе", "Силистра", "Сливен", "Смолян", "София – град", "София – окръг", "Стара Загора", "Добрич", "Търговище", "Хасково", "Шумен", "Ямбол", "Друг/Неизвестен" };
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		if ((await identityManager.ReadUserEGNAsync("admin")) == null)
+              {
+              await identityManager.SeedDataAsync("admin", "admin");
+
+          }
+		iDCard.DateOfExpiry = DateTime.Now.Date;
+	}
+
+	private async Task AddFrontPhoto(InputFileChangeEventArgs e)
+	{ try
+		{
+			var file = e.File;
+			if (file != null)
+			{
+				using (var ms = new MemoryStream())
+				{
+					await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+					photo1 = ms.ToArray();
+				}
+			}
+
+		}
+		catch (Exception ex)
+		{
+			errMess = ex.Message;
+		}
+
+
+	}
+
+
+	private async Task AddBackPhoto(InputFileChangeEventArgs e)
+	{ try
+		{
+
+			var file = e.File;
+			if (file != null)
+			{
+				using (var ms = new MemoryStream())
+				{
+					await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+					photo2 = ms.ToArray();
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			errMess = ex.Message;
+		}
+
+
+	}
+
+	private async Task HandleValidSubmit()
+	{
+		try
+		{
+			if (password.Length < 6)
+			{
+				await JsRuntime.InvokeVoidAsync("alert", "Паролата трябва да е поне 6 знака"); 
+			}else
+			{
+				idPhotoes = new IDCardPhotos(photo1, photo2);
+
+			IDCard idcard = new IDCard(iDCard.IDCardNumber, iDCard.Name, iDCard.MidName, iDCard.LastName, iDCard.EGN, idPhotoes, iDCard.DateOfExpiry, region);
+
+			User user = new User(idcard);
+			user.PasswordHash = password;
+
+			await identityManager.CreateUserAsync(user);
+			navigationManager.NavigateTo("/", true); // Rerender the navigation menu!
+			}
+			
+		}
+		catch (ArgumentException)
+		{
+			await JsRuntime.InvokeVoidAsync("alert", "ЕГНто или номера на личната карта е невалиден или вече е използвано"); // да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+		}
+		catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+
+
+
+}
